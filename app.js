@@ -11,6 +11,15 @@
   const BUCKET = "my-media-private";
   let supabase = null;
   let currentUser = null;
+  
+          await loadGallery();
+      });
+      meta.append(name, del);const albumNameInput = document.getElementById("albumName");
+  const createAlbumBtn = document.getElementById("createAlbumBtn");
+  const albumMessage = document.getElementById("albumMessage");
+  const albumsList = document.getElementById("albumsList");
+  let selectedAlbumId = null;
+
 
   const configured = cfg.SUPABASE_URL && cfg.SUPABASE_KEY &&
     !cfg.SUPABASE_URL.includes("PASTE_") && !cfg.SUPABASE_KEY.includes("PASTE_");
@@ -24,12 +33,50 @@
   supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY);
 
   const say = (el, msg) => { el.textContent = msg || ""; };
+    async function loadAlbums() {
+    const { data, error } = await supabase
+      .from("albums")
+      .select("id,name")
+      .order("created_at", { ascending: false });
+
+    if (error) return say(albumMessage, error.message);
+
+    albumsList.innerHTML = "";
+
+    for (const album of data || []) {
+      const button = document.createElement("button");
+      button.textContent = album.name;
+      button.onclick = () => {
+        selectedAlbumId = album.id;
+        say(albumMessage, "Album එක තෝරාගත්තා: " + album.name);
+        loadGallery();
+      };
+      albumsList.appendChild(button);
+    }
+  }
+
+  createAlbumBtn.addEventListener("click", async () => {
+    const name = albumNameInput.value.trim();
+    if (!name) return say(albumMessage, "Album එකට නමක් දෙන්න.");
+
+    const { error } = await supabase.from("albums").insert({
+      user_id: currentUser.id,
+      name: name
+    });
+
+    if (error) return say(albumMessage, error.message);
+
+    albumNameInput.value = "";
+    say(albumMessage, "Album එක හැදුවා!");
+    await loadAlbums();
+  });
   const showApp = async (user) => {
     currentUser = user;
     authPanel.classList.add("hidden");
     appPanel.classList.remove("hidden");
     logoutBtn.classList.remove("hidden");
     document.getElementById("userEmail").textContent = user.email || "";
+    await loadAlbums();
     await loadGallery();
   };
   const showAuth = () => {
@@ -141,9 +188,7 @@
         if (storageError) return alert(storageError.message);
         const { error: rowError } = await supabase.from("media_items").delete().eq("id", item.id);
         if (rowError) return alert(rowError.message);
-        await loadGallery();
-      });
-      meta.append(name, del);
+
       card.append(media, meta);
       gallery.append(card);
     }
