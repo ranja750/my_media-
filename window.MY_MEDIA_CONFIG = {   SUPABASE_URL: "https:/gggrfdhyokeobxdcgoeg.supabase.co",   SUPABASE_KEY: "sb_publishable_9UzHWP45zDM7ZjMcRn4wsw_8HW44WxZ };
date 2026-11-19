@@ -1,0 +1,4 @@
+window.MY_MEDIA_CONFIG = {
+  SUPABASE_URL: "https://gggrfdhyokeobxdcgoeg.supabase.co",
+  SUPABASE_KEY: "ඔයාගේ_Publishable_Key_එක"
+};
