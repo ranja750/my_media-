@@ -386,7 +386,7 @@
       return;
     }
 
-    if (file.size > 200 * 1024 * 1024) {
+    if (file.size > 50 * 1024 * 1024) {
       say("uploadMessage", "ගොනුව 200MB ට වඩා වැඩියි.");
       return;
     }
