@@ -1,24 +1,9 @@
 
- 
 (() => {
   "use strict";
 
   const cfg = window.MY_MEDIA_CONFIG || {};
   const $ = id => document.getElementById(id);
-
-  const setupNotice = $("setupNotice");
-  const authPanel = $("authPanel");
-  const appPanel = $("appPanel");
-  const loginBtn = $("loginBtn");
-  const signupBtn = $("signupBtn");
-  const logoutBtn = $("logoutBtn");
-  const authMessage = $("authMessage");
-  const uploadMessage = $("uploadMessage");
-  const galleryMessage = $("galleryMessage");
-  const gallery = $("gallery");
-  const albumsList = $("albumsList");
-  const albumNameInput = $("albumName");
-  const albumMessage = $("albumMessage");
 
   const BUCKET = "my-media-private";
 
@@ -27,35 +12,39 @@
   let selectedAlbumId = null;
   let busy = false;
 
-  const say = (el, message) => {
+  const say = (id, message) => {
+    const el = $(id);
     if (el) el.textContent = message || "";
   };
 
-  const showAuth = () => {
+  function showAuth() {
     currentUser = null;
     selectedAlbumId = null;
-    authPanel?.classList.remove("hidden");
-    appPanel?.classList.add("hidden");
-    logoutBtn?.classList.add("hidden");
-    if (gallery) gallery.innerHTML = "";
-    if (albumsList) albumsList.innerHTML = "";
-  };
 
-  const showApp = async user => {
+    $("authPanel")?.classList.remove("hidden");
+    $("appPanel")?.classList.add("hidden");
+    $("logoutBtn")?.classList.add("hidden");
+
+    if ($("gallery")) $("gallery").innerHTML = "";
+    if ($("albumsList")) $("albumsList").innerHTML = "";
+  }
+
+  async function showApp(user) {
     if (!user) return;
+
     currentUser = user;
 
-    authPanel?.classList.add("hidden");
-    appPanel?.classList.remove("hidden");
-    logoutBtn?.classList.remove("hidden");
+    $("authPanel")?.classList.add("hidden");
+    $("appPanel")?.classList.remove("hidden");
+    $("logoutBtn")?.classList.remove("hidden");
 
-    if ($("userEmail")) {
-      $("userEmail").textContent = user.email || "";
-    }
+    say("userEmail", user.email);
 
     await loadAlbums();
     await loadGallery();
-  };
+  }
+
+  // SUPABASE SETUP
 
   const configured =
     cfg.SUPABASE_URL &&
@@ -64,10 +53,10 @@
     !cfg.SUPABASE_KEY.includes("PASTE_");
 
   if (!configured || !window.supabase) {
-    setupNotice?.classList.remove("hidden");
-    say(authMessage, "Supabase URL සහ Key පරීක්ෂා කරන්න.");
-    if (loginBtn) loginBtn.disabled = true;
-    if (signupBtn) signupBtn.disabled = true;
+    $("setupNotice")?.classList.remove("hidden");
+    say("authMessage", "Supabase URL සහ Key පරීක්ෂා කරන්න.");
+    if ($("loginBtn")) $("loginBtn").disabled = true;
+    if ($("signupBtn")) $("signupBtn").disabled = true;
     return;
   }
 
@@ -76,152 +65,224 @@
     cfg.SUPABASE_KEY
   );
 
+  // ALBUMS
+
   async function loadAlbums() {
     if (!currentUser) return;
+
+    const list = $("albumsList");
+    if (!list) return;
+
+    list.innerHTML = "";
 
     const { data, error } = await db
       .from("albums")
       .select("id,name")
+      .eq("user_id", currentUser.id)
       .order("created_at", { ascending: false });
 
     if (error) {
-      say(albumMessage, error.message);
+      say("albumMessage", "Album Error: " + error.message);
       return;
     }
 
-    albumsList.innerHTML = "";
+    const allBtn = document.createElement("button");
+    allBtn.textContent = "📁 All Media";
+    allBtn.className = selectedAlbumId === null ? "active" : "";
 
-    const all = document.createElement("button");
-    all.textContent = "📁 All Media";
-    all.onclick = () => {
+    allBtn.onclick = () => {
       selectedAlbumId = null;
+      loadAlbums();
       loadGallery();
     };
-    albumsList.appendChild(all);
+
+    list.appendChild(allBtn);
 
     (data || []).forEach(album => {
-      const button = document.createElement("button");
-      button.textContent = "📂 " + album.name;
+      const btn = document.createElement("button");
 
-      button.onclick = () => {
+      btn.textContent = "📂 " + album.name;
+      btn.className = selectedAlbumId === album.id ? "active" : "";
+
+      btn.onclick = () => {
         selectedAlbumId = album.id;
-        say(albumMessage, album.name);
+        loadAlbums();
         loadGallery();
       };
 
-      albumsList.appendChild(button);
+      list.appendChild(btn);
     });
+
+    say("albumMessage", "");
   }
+
+  async function createAlbum() {
+    if (!currentUser || busy) return;
+
+    const input = $("albumName");
+    const name = input?.value.trim();
+
+    if (!name) {
+      say("albumMessage", "Album එකට නමක් දෙන්න.");
+      return;
+    }
+
+    busy = true;
+    $("createAlbumBtn").disabled = true;
+    say("albumMessage", "Album එක හදමින්...");
+
+    try {
+      const { data, error } = await db
+        .from("albums")
+        .insert({
+          user_id: currentUser.id,
+          name: name
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      input.value = "";
+      selectedAlbumId = data.id;
+
+      say("albumMessage", "Album එක සාර්ථකව හැදුවා!");
+
+      await loadAlbums();
+      await loadGallery();
+
+    } catch (error) {
+      say("albumMessage", "Error: " + error.message);
+    } finally {
+      busy = false;
+      $("createAlbumBtn").disabled = false;
+    }
+  }
+
+  // GALLERY
 
   async function loadGallery() {
     if (!currentUser) return;
 
+    const gallery = $("gallery");
+    if (!gallery) return;
+
     gallery.innerHTML = "";
-    say(galleryMessage, "Gallery එක ලබාගනිමින්...");
+    say("galleryMessage", "Gallery එක ලබාගනිමින්...");
 
-    let query = db
-      .from("media_items")
-      .select("id,file_path,file_name,mime_type,created_at,album_id")
-      .order("created_at", { ascending: false });
+    try {
+      let query = db
+        .from("media_items")
+        .select("id,file_path,file_name,mime_type,created_at,album_id")
+        .eq("owner_id", currentUser.id)
+        .order("created_at", { ascending: false });
 
-    if (selectedAlbumId) {
-      query = query.eq("album_id", selectedAlbumId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      say(galleryMessage, error.message);
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      say(galleryMessage, "තවම Photo / Video නැහැ.");
-      return;
-    }
-
-    say(galleryMessage, "");
-
-    for (const item of data) {
-      const { data: signed, error: signError } =
-        await db.storage
-          .from(BUCKET)
-          .createSignedUrl(item.file_path, 3600);
-
-      if (signError) continue;
-
-      const card = document.createElement("article");
-      card.className = "item";
-
-      const media = document.createElement(
-        item.mime_type?.startsWith("video/") ? "video" : "img"
-      );
-
-      media.src = signed.signedUrl;
-
-      if (media.tagName === "VIDEO") {
-        media.controls = true;
-        media.playsInline = true;
-      } else {
-        media.alt = item.file_name || "My media";
-        media.loading = "lazy";
+      if (selectedAlbumId) {
+        query = query.eq("album_id", selectedAlbumId);
       }
 
-      const meta = document.createElement("div");
-      meta.className = "meta";
+      const { data, error } = await query;
 
-      const name = document.createElement("p");
-      name.textContent = item.file_name || "Media";
+      if (error) throw error;
 
-      const del = document.createElement("button");
-      del.className = "delete";
-      del.textContent = "Delete";
+      if (!data || data.length === 0) {
+        say("galleryMessage", "තවම Photo / Video නැහැ.");
+        return;
+      }
 
-      del.onclick = async () => {
-        if (!confirm("මේ ගොනුව Delete කරන්නද?")) return;
+      say("galleryMessage", "");
 
-        const { error: storageError } = await db.storage
-          .from(BUCKET)
-          .remove([item.file_path]);
+      for (const item of data) {
+        const { data: signed, error: signError } =
+          await db.storage
+            .from(BUCKET)
+            .createSignedUrl(item.file_path, 3600);
 
-        if (storageError) {
-          alert(storageError.message);
-          return;
+        if (signError) continue;
+
+        const card = document.createElement("article");
+        card.className = "item";
+
+        const isVideo = item.mime_type?.startsWith("video/");
+
+        const media = document.createElement(
+          isVideo ? "video" : "img"
+        );
+
+        media.src = signed.signedUrl;
+
+        if (isVideo) {
+          media.controls = true;
+          media.playsInline = true;
+        } else {
+          media.alt = item.file_name || "My Media";
+          media.loading = "lazy";
         }
 
-        const { error: rowError } = await db
-          .from("media_items")
-          .delete()
-          .eq("id", item.id);
+        const meta = document.createElement("div");
+        meta.className = "meta";
 
-        if (rowError) {
-          alert(rowError.message);
-          return;
-        }
+        const name = document.createElement("p");
+        name.textContent = item.file_name || "Media";
 
-        loadGallery();
-      };
+        const del = document.createElement("button");
+        del.className = "delete";
+        del.textContent = "🗑️ Delete";
 
-      meta.append(name, del);
-      card.append(media, meta);
-      gallery.appendChild(card);
+        del.onclick = async () => {
+          if (!confirm("මේ ගොනුව Delete කරන්නද?")) return;
+
+          del.disabled = true;
+
+          try {
+            const { error: storageError } = await db.storage
+              .from(BUCKET)
+              .remove([item.file_path]);
+
+            if (storageError) throw storageError;
+
+            const { error: rowError } = await db
+              .from("media_items")
+              .delete()
+              .eq("id", item.id)
+              .eq("owner_id", currentUser.id);
+
+            if (rowError) throw rowError;
+
+            await loadGallery();
+
+          } catch (error) {
+            alert("Delete Error: " + error.message);
+            del.disabled = false;
+          }
+        };
+
+        meta.append(name, del);
+        card.append(media, meta);
+        gallery.appendChild(card);
+      }
+
+    } catch (error) {
+      say("galleryMessage", "Gallery Error: " + error.message);
     }
   }
 
-  loginBtn?.addEventListener("click", async () => {
+  // LOGIN
+
+  $("loginBtn")?.addEventListener("click", async () => {
     if (busy) return;
 
     const email = $("email")?.value.trim();
     const password = $("password")?.value;
 
     if (!email || !password) {
-      say(authMessage, "Email සහ Password දෙකම ඇතුළත් කරන්න.");
+      say("authMessage", "Email සහ Password ඇතුළත් කරන්න.");
       return;
     }
 
     busy = true;
-    loginBtn.disabled = true;
-    say(authMessage, "Login වෙමින්...");
+    $("loginBtn").disabled = true;
+    say("authMessage", "Login වෙමින්...");
 
     try {
       const { data, error } = await db.auth.signInWithPassword({
@@ -231,36 +292,38 @@
 
       if (error) throw error;
 
-      say(authMessage, "Login සාර්ථකයි!");
       await showApp(data.user);
+      say("authMessage", "");
 
     } catch (error) {
-      say(authMessage, "Login Error: " + error.message);
+      say("authMessage", "Login Error: " + error.message);
     } finally {
       busy = false;
-      loginBtn.disabled = false;
+      $("loginBtn").disabled = false;
     }
   });
 
-  signupBtn?.addEventListener("click", async () => {
+  // SIGNUP
+
+  $("signupBtn")?.addEventListener("click", async () => {
     if (busy) return;
 
     const email = $("email")?.value.trim();
     const password = $("password")?.value;
 
     if (!email || !password) {
-      say(authMessage, "Email සහ Password ඇතුළත් කරන්න.");
+      say("authMessage", "Email සහ Password ඇතුළත් කරන්න.");
       return;
     }
 
     if (password.length < 6) {
-      say(authMessage, "Password එක අවම අකුරු 6ක් විය යුතුයි.");
+      say("authMessage", "Password එක අවම අකුරු 6ක් විය යුතුයි.");
       return;
     }
 
     busy = true;
-    signupBtn.disabled = true;
-    say(authMessage, "Account එක හදමින්...");
+    $("signupBtn").disabled = true;
+    say("authMessage", "Account එක හදමින්...");
 
     try {
       const { data, error } = await db.auth.signUp({
@@ -272,63 +335,46 @@
 
       if (data.session && data.user) {
         await showApp(data.user);
-        say(authMessage, "Account එක සාර්ථකව හැදුවා!");
+        say("authMessage", "Account එක හැදුවා!");
       } else {
-        say(authMessage, "Email එකට ආ Verification link එක තහවුරු කරලා Login වෙන්න.");
+        say("authMessage", "Email Verification කරලා Login වෙන්න.");
       }
 
     } catch (error) {
-      say(authMessage, "Signup Error: " + error.message);
+      say("authMessage", "Signup Error: " + error.message);
     } finally {
       busy = false;
-      signupBtn.disabled = false;
+      $("signupBtn").disabled = false;
     }
   });
 
-  logoutBtn?.addEventListener("click", async () => {
+  // LOGOUT
+
+  $("logoutBtn")?.addEventListener("click", async () => {
     const { error } = await db.auth.signOut();
 
     if (error) {
-      say(authMessage, error.message);
+      say("authMessage", error.message);
       return;
     }
 
     showAuth();
   });
 
-  createAlbumBtn?.addEventListener("click", async () => {
-    if (!currentUser) return;
+  // CREATE ALBUM BUTTON
 
-    const name = albumNameInput.value.trim();
+  $("createAlbumBtn")?.addEventListener("click", createAlbum);
 
-    if (!name) {
-      say(albumMessage, "Album එකට නමක් දෙන්න.");
-      return;
-    }
-
-    const { error } = await db.from("albums").insert({
-      user_id: currentUser.id,
-      name
-    });
-
-    if (error) {
-      say(albumMessage, error.message);
-      return;
-    }
-
-    albumNameInput.value = "";
-    say(albumMessage, "Album එක හැදුවා!");
-    await loadAlbums();
-  });
+  // UPLOAD
 
   $("uploadBtn")?.addEventListener("click", async () => {
-    if (!currentUser) return;
+    if (!currentUser || busy) return;
 
     const input = $("fileInput");
-    const file = input.files?.[0];
+    const file = input?.files?.[0];
 
     if (!file) {
-      say(uploadMessage, "Photo හෝ Video එකක් තෝරන්න.");
+      say("uploadMessage", "Photo හෝ Video එකක් තෝරන්න.");
       return;
     }
 
@@ -336,23 +382,28 @@
       !file.type.startsWith("image/") &&
       !file.type.startsWith("video/")
     ) {
-      say(uploadMessage, "Image හෝ Video පමණක් තෝරන්න.");
+      say("uploadMessage", "Image හෝ Video පමණක් තෝරන්න.");
       return;
     }
 
     if (file.size > 200 * 1024 * 1024) {
-      say(uploadMessage, "ගොනුව 200MB ට වඩා වැඩියි.");
+      say("uploadMessage", "ගොනුව 200MB ට වඩා වැඩියි.");
       return;
     }
 
     const ext = (file.name.split(".").pop() || "bin")
       .replace(/[^a-zA-Z0-9]/g, "");
 
-    const path = `${currentUser.id}/${crypto.randomUUID()}.${ext}`;
+    const path =
+      currentUser.id + "/" +
+      Date.now() + "-" +
+      Math.random().toString(36).slice(2) + "." + ext;
 
     const btn = $("uploadBtn");
+
+    busy = true;
     btn.disabled = true;
-    say(uploadMessage, "Upload වෙමින්...");
+    say("uploadMessage", "Upload වෙමින්...");
 
     try {
       const { error } = await db.storage
@@ -382,44 +433,48 @@
       }
 
       input.value = "";
-      say(uploadMessage, "Upload සාර්ථකයි!");
+
+      say("uploadMessage", "Upload සාර්ථකයි!");
+
       await loadGallery();
 
     } catch (error) {
-      say(uploadMessage, "Upload Error: " + error.message);
+      say("uploadMessage", "Upload Error: " + error.message);
     } finally {
+      busy = false;
       btn.disabled = false;
     }
   });
 
+  // REFRESH
+
   $("refreshBtn")?.addEventListener("click", loadGallery);
 
+  // INITIALIZE
+
   async function initialize() {
-    say(authMessage, "පරීක්ෂා කරමින්...");
+    say("authMessage", "පරීක්ෂා කරමින්...");
 
     const { data, error } = await db.auth.getSession();
 
-    if (error) {
-      say(authMessage, error.message);
-      return;
-    }
+    if (error) throw error;
 
     if (data.session?.user) {
       await showApp(data.session.user);
     } else {
       showAuth();
-      say(authMessage, "");
+      say("authMessage", "");
     }
   }
 
-  db.auth.onAuthStateChange((event, session) => {
+  db.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_OUT") {
       showAuth();
     }
   });
 
   initialize().catch(error => {
-    say(authMessage, "Error: " + error.message);
+    say("authMessage", "Error: " + error.message);
   });
 
 })();
