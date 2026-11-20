@@ -1,30 +1,4 @@
-<!doctype html>
-<html lang="si">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>My Media — Private Vault</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-  <main class="shell">
-    <header class="top">
-      <div class="brand"><span class="brand-mark">M</span><div><h1>My Media</h1><p>ඔයාගේ පෞද්ගලික Photo & Video Vault</p></div></div>
-      <button id="logoutBtn" class="ghost hidden">Logout</button>
-    </header>
-
-    <section id="setupNotice" class="notice hidden">
-      <b>Setup අවශ්‍යයි</b>
-      <p>config.js ගොනුවේ Supabase Project URL සහ Publishable/anon key දාන්න. විස්තර README_SI.txt තුළ ඇත.</p>
-    </section>
-
-    <section id="authPanel" class="panel auth-panel">
-      <h2>Private Login</h2>
-      <p class="muted">ඔයාගේ Email සහ Password භාවිතා කරන්න.</p>
-      <label>Email<input id="email" type="email" autocomplete="email" placeholder="you@example.com"></label>
-      <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Password"></label>
+   <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Password"></label>
       <div class="actions">
         <button id="loginBtn">Login</button>
         <button id="signupBtn" class="secondary">Create account</button>
@@ -55,3 +29,5 @@
   <script src="app.js"></script>
 </body>
 </html>
+
+   
